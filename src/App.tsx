@@ -10,15 +10,6 @@ const isElectron = () => {
   return window.electronAPI !== undefined;
 };
 
-// Log to both console and main process (for terminal visibility)
-const log = (message: string, ...args: any[]) => {
-  const fullMessage = args.length > 0 ? `${message} ${JSON.stringify(args)}` : message;
-  console.log(fullMessage);
-  if (isElectron() && window.electronAPI.log) {
-    window.electronAPI.log(fullMessage);
-  }
-};
-
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -62,67 +53,46 @@ function App() {
       /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(f.name)
     );
 
-    console.log("[handleDrop] Dropped files:", audioFiles.map(f => f.name));
-
     if (audioFiles.length === 0) return;
 
     if (isElectron()) {
-      // Electron: get file paths and copy
       const filePaths = audioFiles.map((f) => (f as any).path);
-      console.log("[handleDrop] File paths:", filePaths);
-
       if (filePaths[0]) {
         const copiedSongs = await window.electronAPI.copyToSongs(filePaths);
-        console.log("[handleDrop] Copied:", copiedSongs);
         setSongs((prev) => [...prev, ...copiedSongs]);
       }
     } else {
-      // Browser: create blob URLs
       const newSongs = audioFiles.map((file) => ({
         name: file.name,
         path: URL.createObjectURL(file),
       }));
-      console.log("[handleDrop] Browser songs:", newSongs);
       setSongs((prev) => [...prev, ...newSongs]);
     }
   };
 
   const loadSavedSongs = async () => {
-    console.log("[loadSavedSongs] isElectron:", isElectron());
-    if (!isElectron()) {
-      console.log("[loadSavedSongs] Browser mode - no persistence");
-      return;
-    }
+    if (!isElectron()) return;
 
     try {
       const savedSongs = await window.electronAPI.loadSongs();
-      console.log("[loadSavedSongs] Loaded:", savedSongs);
       setSongs(savedSongs);
-    } catch (e) {
-      console.error("[loadSavedSongs] Error:", e);
+    } catch {
+      // Failed to load songs
     }
   };
 
-  // Open file picker to add songs
   const addSongs = async () => {
-    console.log("[addSongs] Opening file picker, isElectron:", isElectron());
-
     if (isElectron()) {
-      // Electron: use IPC
       try {
         const filePaths = await window.electronAPI.openFileDialog();
-        console.log("[addSongs] Selected:", filePaths);
-
         if (filePaths.length > 0) {
           const copiedSongs = await window.electronAPI.copyToSongs(filePaths);
-          console.log("[addSongs] Copied:", copiedSongs);
           setSongs((prev) => [...prev, ...copiedSongs]);
         }
-      } catch (e) {
-        console.error("[addSongs] Error:", e);
+      } catch {
+        // Failed to add songs
       }
     } else {
-      // Browser: use file input
       fileInputRef.current?.click();
     }
   };
@@ -141,7 +111,6 @@ function App() {
       });
     }
 
-    console.log("[handleFileInput] Added:", newSongs);
     setSongs((prev) => [...prev, ...newSongs]);
     e.target.value = ""; // Reset input
   };
@@ -177,33 +146,19 @@ function App() {
   }, [isPlaying]);
 
   const togglePlay = async () => {
-    log("[togglePlay] Called, currentSong:", currentSong);
-    log("[togglePlay] audioRef exists:", !!audioRef.current);
-    log("[togglePlay] audioRef.src:", audioRef.current?.src);
-    log("[togglePlay] audioRef.readyState:", audioRef.current?.readyState);
-    log("[togglePlay] audioRef.networkState:", audioRef.current?.networkState);
-    log("[togglePlay] audioRef.error:", audioRef.current?.error);
-
-    if (!audioRef.current || !currentSong) {
-      log("[togglePlay] No audio ref or song, returning");
-      return;
-    }
+    if (!audioRef.current || !currentSong) return;
 
     if (!analyserRef.current) {
-      log("[togglePlay] Setting up analyzer");
       setupAnalyzer();
     }
 
     if (isPlaying) {
-      log("[togglePlay] Pausing");
       audioRef.current.pause();
     } else {
-      log("[togglePlay] Playing, src:", audioRef.current.src);
       try {
         await audioRef.current.play();
-        log("[togglePlay] Play started successfully");
-      } catch (e: any) {
-        log("[togglePlay] Play FAILED:", e?.name, e?.message);
+      } catch {
+        // Play failed
       }
     }
     setIsPlaying(!isPlaying);
@@ -211,11 +166,7 @@ function App() {
 
   const playNext = () => {
     if (songs.length === 0) return;
-    setCurrentIndex((prev) => {
-      const next = (prev + 1) % songs.length;
-      log("[playNext] Index:", prev, "->", next, "(looping:", next === 0, ")");
-      return next;
-    });
+    setCurrentIndex((prev) => (prev + 1) % songs.length);
     setIsPlaying(true);
   };
 
@@ -227,8 +178,6 @@ function App() {
 
   const deleteSong = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    console.log("[deleteSong] Deleting index:", index);
-
     setSongs((prev) => {
       const newSongs = prev.filter((_, i) => i !== index);
       return newSongs;
@@ -246,7 +195,6 @@ function App() {
   };
 
   const clearPlaylist = () => {
-    console.log("[clearPlaylist] Clearing all songs");
     setSongs([]);
     setCurrentIndex(0);
     setIsPlaying(false);
@@ -399,29 +347,13 @@ function App() {
           ref={audioRef}
           src={currentSong?.path}
           onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-          onLoadedMetadata={() => {
-            log("[audio] Metadata loaded, duration:", audioRef.current?.duration);
-            setDuration(audioRef.current?.duration || 0);
-          }}
+          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
           onEnded={playNext}
-          onError={() => {
-            log("[audio] ERROR code:", audioRef.current?.error?.code);
-            log("[audio] ERROR message:", audioRef.current?.error?.message);
-            log("[audio] ERROR src:", audioRef.current?.src);
-          }}
           onCanPlay={() => {
-            log("[audio] Can play, src:", audioRef.current?.src);
-            // Auto-play when ready if isPlaying is true (handles song transitions)
             if (isPlaying && audioRef.current?.paused) {
               audioRef.current.play();
             }
           }}
-          onLoadStart={() => log("[audio] Load started, src:", currentSong?.path)}
-          onStalled={() => log("[audio] Stalled")}
-          onSuspend={() => log("[audio] Suspend")}
-          onWaiting={() => log("[audio] Waiting")}
-          onAbort={() => log("[audio] Abort")}
-          onEmptied={() => log("[audio] Emptied")}
         />
       </div>
     </div>

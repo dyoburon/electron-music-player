@@ -1,30 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import { pathToFileURL } from "url";
-
-// Safe logging wrapper to handle EPIPE errors when stdout is closed
-const safeLog = (...args: unknown[]) => {
-  try {
-    console.log(...args);
-  } catch (e: unknown) {
-    // Ignore EPIPE errors (stdout closed)
-    if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "EPIPE") {
-      throw e;
-    }
-  }
-};
-
-const safeError = (...args: unknown[]) => {
-  try {
-    console.error(...args);
-  } catch (e: unknown) {
-    if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "EPIPE") {
-      throw e;
-    }
-  }
-};
-
 // Enable audio autoplay without user gesture (must be before app ready)
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("disable-background-media-suspend");
@@ -78,9 +54,6 @@ app.whenReady().then(() => {
   // Register custom protocol for serving local audio files
   protocol.handle("media", (request) => {
     const filePath = decodeURIComponent(request.url.replace("media://", ""));
-    safeLog("[protocol] Serving file:", filePath);
-
-    // Use file:// URL fetch for proper streaming support
     const fileUrl = `file://${filePath}`;
     return require("electron").net.fetch(fileUrl);
   });
@@ -101,11 +74,6 @@ app.on("activate", () => {
 });
 
 // IPC Handlers
-
-// Log messages from renderer
-ipcMain.on("renderer-log", (_, message: string) => {
-  safeLog("[renderer]", message);
-});
 
 // Open file dialog to select audio files
 ipcMain.handle("open-file-dialog", async () => {
@@ -135,13 +103,12 @@ ipcMain.handle("copy-to-songs", async (_, filePaths: string[]) => {
     try {
       fs.copyFileSync(filePath, destPath);
       const mediaUrl = `media://${encodeURIComponent(destPath)}`;
-      safeLog("[copy-to-songs] Created URL:", mediaUrl);
       copiedFiles.push({
         name: fileName,
         path: mediaUrl,
       });
-    } catch (e) {
-      safeError(`Failed to copy ${fileName}:`, e);
+    } catch {
+      // Failed to copy file
     }
   }
 
@@ -160,17 +127,14 @@ ipcMain.handle("load-songs", async () => {
       .map((file) => {
         const fullPath = path.join(songsDir, file);
         const mediaUrl = `media://${encodeURIComponent(fullPath)}`;
-        safeLog("[load-songs] File:", file, "URL:", mediaUrl);
         return {
           name: file,
           path: mediaUrl,
         };
       });
 
-    safeLog("[load-songs] Loaded", songs.length, "songs");
     return songs;
-  } catch (e) {
-    safeError("Failed to load songs:", e);
+  } catch {
     return [];
   }
 });

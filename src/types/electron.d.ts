@@ -8,7 +8,6 @@ interface ElectronAPI {
   copyToSongs: (filePaths: string[]) => Promise<Song[]>;
   loadSongs: () => Promise<Song[]>;
   getSongsDir: () => Promise<string>;
-  log: (message: string) => void;
 }
 
 declare global {
