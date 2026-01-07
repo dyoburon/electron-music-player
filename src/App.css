@@ -1,0 +1,480 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-dark: #0a0a0a;
+  --bg-panel: #1a1a2e;
+  --bg-display: #0d1117;
+  --accent: #00ff88;
+  --accent-dim: #00aa55;
+  --accent-glow: rgba(0, 255, 136, 0.5);
+  --text: #00ff88;
+  --text-dim: #447755;
+  --border: #2a2a4e;
+  --highlight: #ff6600;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'VT323', monospace;
+}
+
+.crt {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+  overflow: hidden;
+}
+
+.scanlines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+.player {
+  width: 380px;
+  background: linear-gradient(145deg, #1e1e3f, #151528);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 1;
+}
+
+.player-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+  background: linear-gradient(90deg, #2a2a5a, #1a1a3a);
+  border-radius: 4px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+}
+
+.title-text {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 10px;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+  letter-spacing: 2px;
+}
+
+.window-controls {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.window-controls span {
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.window-controls span:hover {
+  color: var(--accent);
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.visualizer {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+  padding: 8px;
+  background: var(--bg-display);
+  border: 2px inset #0a0a15;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.bar {
+  width: 16px;
+  background: linear-gradient(to top, var(--accent), var(--highlight));
+  border-radius: 2px 2px 0 0;
+  transition: height 0.05s ease-out;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.display {
+  background: var(--bg-display);
+  border: 2px inset #0a0a15;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.song-info {
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.marquee {
+  display: block;
+  font-size: 18px;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent-glow);
+  white-space: nowrap;
+  animation: marquee 10s linear infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.time-display {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--text-dim);
+  font-family: 'VT323', monospace;
+}
+
+.seek-bar {
+  margin-bottom: 10px;
+}
+
+.seek-bar input[type="range"] {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-display);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.seek-bar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ctrl-btn {
+  width: 50px;
+  height: 40px;
+  background: linear-gradient(145deg, #2a2a5a, #1a1a3a);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ctrl-btn:hover {
+  background: linear-gradient(145deg, #3a3a6a, #2a2a4a);
+  box-shadow: 0 0 15px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.ctrl-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.play-btn {
+  width: 60px;
+  background: linear-gradient(145deg, #003322, #002211);
+  border-color: var(--accent-dim);
+}
+
+.play-btn:hover {
+  background: linear-gradient(145deg, #004433, #003322);
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: var(--bg-display);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.vol-icon {
+  font-size: 16px;
+}
+
+.volume-control input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.volume-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.playlist {
+  background: var(--bg-display);
+  border: 2px inset #0a0a15;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.playlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: linear-gradient(90deg, #2a2a5a, #1a1a3a);
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.add-btn {
+  background: var(--accent-dim);
+  border: none;
+  color: #000;
+  padding: 4px 8px;
+  font-family: 'VT323', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.add-btn:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.playlist-items {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.playlist-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.playlist-items::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+.playlist-items::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.playlist-items::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
+}
+
+.empty-playlist {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.empty-playlist:hover {
+  color: var(--accent);
+}
+
+.playlist-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-bottom: 1px solid rgba(42, 42, 78, 0.5);
+}
+
+.playlist-item:hover {
+  background: rgba(0, 255, 136, 0.05);
+}
+
+.playlist-item.active {
+  background: rgba(0, 255, 136, 0.1);
+  border-left: 3px solid var(--accent);
+}
+
+.track-num {
+  color: var(--text-dim);
+  font-size: 12px;
+  min-width: 24px;
+}
+
+.track-name {
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-item.active .track-name {
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent-glow);
+}
+
+
+/* Glow pulse for playing state */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px var(--accent-glow); }
+  50% { box-shadow: 0 0 30px var(--accent-glow), 0 0 40px rgba(0, 255, 136, 0.3); }
+}
+
+/* Drag and drop overlay */
+.crt.dragging {
+  background: rgba(0, 255, 136, 0.05);
+}
+
+.drag-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  border: 3px dashed var(--accent);
+}
+
+.drag-text {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 14px;
+  color: var(--accent);
+  text-shadow: 0 0 20px var(--accent-glow);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Playlist actions */
+.playlist-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.clear-btn {
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  color: var(--text-dim);
+  padding: 3px 6px;
+  font-family: 'VT323', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.clear-btn:hover {
+  border-color: #ff4444;
+  color: #ff4444;
+}
+
+/* Delete button */
+.delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: auto;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.playlist-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  color: #ff4444;
+}
+
+/* Improve playlist for many songs */
+.playlist-items {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-bottom: 1px solid rgba(42, 42, 78, 0.5);
+}
+
+.track-name {
+  flex: 1;
+  min-width: 0;
+}
