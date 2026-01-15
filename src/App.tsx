@@ -1,83 +1,86 @@
 import { useState, useRef, useEffect } from "react";
+import "./App.css";
 
 interface Song {
   name: string;
   path: string;
 }
 
-// Check if running in Electron
+interface Playlist {
+  id: string;
+  name: string;
+  songs: Song[];
+}
+
 const isElectron = () => {
   return window.electronAPI !== undefined;
 };
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.7);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(16).fill(5));
+  const [showLibrary, setShowLibrary] = useState(true);
+  const [draggedSong, setDraggedSong] = useState<Song | null>(null);
+  const [dragOverPlaylistId, setDragOverPlaylistId] = useState<string | null>(null);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-
-  const currentSong = songs[currentIndex];
-
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const newPlaylistInputRef = useRef<HTMLInputElement>(null);
 
-  // Load saved songs on mount
+  const currentPlaylist = selectedPlaylistId
+    ? playlists.find((p) => p.id === selectedPlaylistId)
+    : null;
+  const displaySongs = currentPlaylist ? currentPlaylist.songs : songs;
+  const currentSong = displaySongs[currentIndex];
+
+  // Load saved data on mount
   useEffect(() => {
     loadSavedSongs();
+    loadSavedPlaylists();
   }, []);
 
-  // Handle drag and drop
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    const audioFiles = files.filter((f) =>
-      f.type.startsWith("audio/") ||
-      /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(f.name)
-    );
-
-    if (audioFiles.length === 0) return;
-
-    if (isElectron()) {
-      const filePaths = audioFiles.map((f) => (f as any).path);
-      if (filePaths[0]) {
-        const copiedSongs = await window.electronAPI.copyToSongs(filePaths);
-        setSongs((prev) => [...prev, ...copiedSongs]);
-      }
-    } else {
-      const newSongs = audioFiles.map((file) => ({
-        name: file.name,
-        path: URL.createObjectURL(file),
-      }));
-      setSongs((prev) => [...prev, ...newSongs]);
+  // Auto-save playlists when they change
+  useEffect(() => {
+    if (playlists.length > 0 && isElectron()) {
+      window.electronAPI.savePlaylists(playlists);
     }
-  };
+  }, [playlists]);
+
+  // Focus input when creating playlist
+  useEffect(() => {
+    if (isCreatingPlaylist && newPlaylistInputRef.current) {
+      newPlaylistInputRef.current.focus();
+    }
+  }, [isCreatingPlaylist]);
 
   const loadSavedSongs = async () => {
     if (!isElectron()) return;
-
     try {
       const savedSongs = await window.electronAPI.loadSongs();
       setSongs(savedSongs);
     } catch {
       // Failed to load songs
+    }
+  };
+
+  const loadSavedPlaylists = async () => {
+    if (!isElectron()) return;
+    try {
+      const savedPlaylists = await window.electronAPI.loadPlaylists();
+      setPlaylists(savedPlaylists);
+    } catch {
+      // Failed to load playlists
     }
   };
 
@@ -97,7 +100,6 @@ function App() {
     }
   };
 
-  // Handle browser file input change
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -112,10 +114,101 @@ function App() {
     }
 
     setSongs((prev) => [...prev, ...newSongs]);
-    e.target.value = ""; // Reset input
+    e.target.value = "";
   };
 
-  // Setup audio analyzer for visualizer
+  // Playlist management
+  const createPlaylist = () => {
+    if (!newPlaylistName.trim()) return;
+    const newPlaylist: Playlist = {
+      id: Date.now().toString(),
+      name: newPlaylistName.trim(),
+      songs: [],
+    };
+    setPlaylists((prev) => [...prev, newPlaylist]);
+    setNewPlaylistName("");
+    setIsCreatingPlaylist(false);
+    setSelectedPlaylistId(newPlaylist.id);
+  };
+
+  const deletePlaylist = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPlaylists((prev) => prev.filter((p) => p.id !== id));
+    if (selectedPlaylistId === id) {
+      setSelectedPlaylistId(null);
+      setCurrentIndex(0);
+    }
+  };
+
+  const renamePlaylist = (id: string, newName: string) => {
+    setPlaylists((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, name: newName } : p))
+    );
+  };
+
+  // Drag and drop handlers
+  const handleSongDragStart = (song: Song) => {
+    setDraggedSong(song);
+  };
+
+  const handleSongDragEnd = () => {
+    setDraggedSong(null);
+    setDragOverPlaylistId(null);
+  };
+
+  const handlePlaylistDragOver = (e: React.DragEvent, playlistId: string) => {
+    e.preventDefault();
+    setDragOverPlaylistId(playlistId);
+  };
+
+  const handlePlaylistDragLeave = () => {
+    setDragOverPlaylistId(null);
+  };
+
+  const handlePlaylistDrop = (playlistId: string) => {
+    if (!draggedSong) return;
+
+    setPlaylists((prev) =>
+      prev.map((p) => {
+        if (p.id === playlistId) {
+          // Check if song already exists in playlist
+          const exists = p.songs.some((s) => s.path === draggedSong.path);
+          if (exists) return p;
+          return { ...p, songs: [...p.songs, draggedSong] };
+        }
+        return p;
+      })
+    );
+
+    setDraggedSong(null);
+    setDragOverPlaylistId(null);
+  };
+
+  const removeSongFromPlaylist = (playlistId: string, songIndex: number) => {
+    setPlaylists((prev) =>
+      prev.map((p) => {
+        if (p.id === playlistId) {
+          const newSongs = p.songs.filter((_, i) => i !== songIndex);
+          return { ...p, songs: newSongs };
+        }
+        return p;
+      })
+    );
+
+    // Adjust current index if needed
+    if (selectedPlaylistId === playlistId) {
+      if (songIndex < currentIndex) {
+        setCurrentIndex((prev) => prev - 1);
+      } else if (songIndex === currentIndex) {
+        setIsPlaying(false);
+        if (currentIndex >= displaySongs.length - 1) {
+          setCurrentIndex(0);
+        }
+      }
+    }
+  };
+
+  // Audio setup and controls
   const setupAnalyzer = () => {
     if (!audioRef.current || analyserRef.current) return;
 
@@ -128,7 +221,6 @@ function App() {
     analyserRef.current.connect(audioContextRef.current.destination);
   };
 
-  // Visualizer animation
   useEffect(() => {
     if (!isPlaying || !analyserRef.current) return;
 
@@ -165,46 +257,27 @@ function App() {
   };
 
   const playNext = () => {
-    if (songs.length === 0) return;
-    setCurrentIndex((prev) => (prev + 1) % songs.length);
+    if (displaySongs.length === 0) return;
+    setCurrentIndex((prev) => (prev + 1) % displaySongs.length);
     setIsPlaying(true);
   };
 
   const playPrev = () => {
-    if (songs.length === 0) return;
-    setCurrentIndex((prev) => (prev - 1 + songs.length) % songs.length);
+    if (displaySongs.length === 0) return;
+    setCurrentIndex((prev) => (prev - 1 + displaySongs.length) % displaySongs.length);
     setIsPlaying(true);
   };
 
-  const deleteSong = (index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSongs((prev) => {
-      const newSongs = prev.filter((_, i) => i !== index);
-      return newSongs;
-    });
-
-    // Adjust current index if needed
-    if (index < currentIndex) {
-      setCurrentIndex((prev) => prev - 1);
-    } else if (index === currentIndex) {
-      setIsPlaying(false);
-      if (currentIndex >= songs.length - 1) {
-        setCurrentIndex(0);
-      }
-    }
-  };
-
-  const clearPlaylist = () => {
-    setSongs([]);
-    setCurrentIndex(0);
-    setIsPlaying(false);
+  const playSong = (index: number) => {
+    setCurrentIndex(index);
+    setIsPlaying(true);
   };
 
   useEffect(() => {
     if (audioRef.current && currentSong && isPlaying) {
       audioRef.current.play();
     }
-  }, [currentIndex]);
+  }, [currentIndex, selectedPlaylistId]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -220,13 +293,7 @@ function App() {
   };
 
   return (
-    <div
-      className={`crt ${isDragging ? "dragging" : ""}`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {/* Hidden file input for browser mode */}
+    <div className="app-container">
       <input
         type="file"
         ref={fileInputRef}
@@ -236,126 +303,204 @@ function App() {
         onChange={handleFileInput}
       />
 
-      {/* Drag overlay */}
-      {isDragging && (
-        <div className="drag-overlay">
-          <div className="drag-text">DROP AUDIO FILES HERE</div>
+      {/* Sidebar - Playlists */}
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <span className="sidebar-title">PLAYLISTS</span>
+          <button
+            className="new-playlist-btn"
+            onClick={() => setIsCreatingPlaylist(true)}
+          >
+            +
+          </button>
         </div>
-      )}
 
-      <div className="player">
-        <div className="player-header">
-          <span className="title-text">RETRO PLAYER</span>
-        </div>
-
-        <div className="visualizer">
-          {visualizerData.map((height, i) => (
-            <div
-              key={i}
-              className="bar"
-              style={{ height: `${height}px` }}
+        {isCreatingPlaylist && (
+          <div className="new-playlist-form">
+            <input
+              ref={newPlaylistInputRef}
+              type="text"
+              value={newPlaylistName}
+              onChange={(e) => setNewPlaylistName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") createPlaylist();
+                if (e.key === "Escape") {
+                  setIsCreatingPlaylist(false);
+                  setNewPlaylistName("");
+                }
+              }}
+              placeholder="Playlist name..."
             />
+            <button onClick={createPlaylist}>OK</button>
+          </div>
+        )}
+
+        <div className="playlist-list">
+          <div
+            className={`playlist-entry ${selectedPlaylistId === null ? "active" : ""}`}
+            onClick={() => {
+              setSelectedPlaylistId(null);
+              setCurrentIndex(0);
+              setShowLibrary(true);
+            }}
+          >
+            <span className="playlist-icon">📚</span>
+            <span className="playlist-name">Library ({songs.length})</span>
+          </div>
+
+          {playlists.map((playlist) => (
+            <div
+              key={playlist.id}
+              className={`playlist-entry ${selectedPlaylistId === playlist.id ? "active" : ""} ${
+                dragOverPlaylistId === playlist.id ? "drag-over" : ""
+              }`}
+              onClick={() => {
+                setSelectedPlaylistId(playlist.id);
+                setCurrentIndex(0);
+                setShowLibrary(false);
+              }}
+              onDragOver={(e) => handlePlaylistDragOver(e, playlist.id)}
+              onDragLeave={handlePlaylistDragLeave}
+              onDrop={() => handlePlaylistDrop(playlist.id)}
+            >
+              <span className="playlist-icon">🎵</span>
+              <span className="playlist-name">
+                {playlist.name} ({playlist.songs.length})
+              </span>
+              <button
+                className="delete-playlist-btn"
+                onClick={(e) => deletePlaylist(playlist.id, e)}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
+      </div>
 
-        <div className="display">
-          <div className="song-info">
-            <span className="marquee">
-              {currentSong ? currentSong.name : "NO TRACK LOADED"}
-            </span>
+      {/* Main Player */}
+      <div className="main-content">
+        <div className="player">
+          <div className="player-header">
+            <span className="title-text">RETRO PLAYER</span>
           </div>
-          <div className="time-display">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
+
+          <div className="visualizer">
+            {visualizerData.map((height, i) => (
+              <div key={i} className="bar" style={{ height: `${height}px` }} />
+            ))}
           </div>
-        </div>
 
-        <div className="seek-bar">
-          <input
-            type="range"
-            min="0"
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-          />
-        </div>
-
-        <div className="controls">
-          <button onClick={playPrev} className="ctrl-btn">⏮</button>
-          <button onClick={togglePlay} className="ctrl-btn play-btn">
-            {isPlaying ? "⏸" : "▶"}
-          </button>
-          <button onClick={playNext} className="ctrl-btn">⏭</button>
-        </div>
-
-        <div className="volume-control">
-          <span className="vol-icon">🔊</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              setVolume(v);
-              if (audioRef.current) audioRef.current.volume = v;
-            }}
-          />
-        </div>
-
-        <div className="playlist">
-          <div className="playlist-header">
-            <span>PLAYLIST ({songs.length})</span>
-            <div className="playlist-actions">
-              {songs.length > 0 && (
-                <button className="clear-btn" onClick={clearPlaylist}>CLEAR</button>
-              )}
-              <button className="add-btn" onClick={addSongs}>+ ADD</button>
+          <div className="display">
+            <div className="song-info">
+              <span className="marquee">
+                {currentSong ? currentSong.name : "NO TRACK LOADED"}
+              </span>
+            </div>
+            <div className="time-display">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
             </div>
           </div>
-          <div className="playlist-items">
-            {songs.length === 0 ? (
-              <div className="empty-playlist" onClick={addSongs}>
-                Drop audio files here or click to add
+
+          <div className="seek-bar">
+            <input
+              type="range"
+              min="0"
+              max={duration || 100}
+              value={currentTime}
+              onChange={handleSeek}
+            />
+          </div>
+
+          <div className="controls">
+            <button onClick={playPrev} className="ctrl-btn">
+              ⏮
+            </button>
+            <button onClick={togglePlay} className="ctrl-btn play-btn">
+              {isPlaying ? "⏸" : "▶"}
+            </button>
+            <button onClick={playNext} className="ctrl-btn">
+              ⏭
+            </button>
+          </div>
+
+          <div className="volume-control">
+            <span className="vol-icon">🔊</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                setVolume(v);
+                if (audioRef.current) audioRef.current.volume = v;
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Songs Panel */}
+        <div className="songs-panel">
+          <div className="songs-header">
+            <span>
+              {selectedPlaylistId
+                ? `${currentPlaylist?.name || "Playlist"}`
+                : "LIBRARY"}
+            </span>
+            {!selectedPlaylistId && (
+              <button className="add-btn" onClick={addSongs}>
+                + ADD SONGS
+              </button>
+            )}
+          </div>
+
+          <div className="songs-list">
+            {displaySongs.length === 0 ? (
+              <div className="empty-songs" onClick={selectedPlaylistId ? undefined : addSongs}>
+                {selectedPlaylistId
+                  ? "Drag songs here from the library"
+                  : "Drop audio files here or click to add"}
               </div>
             ) : (
-              songs.map((song, i) => (
+              displaySongs.map((song, i) => (
                 <div
                   key={i}
-                  className={`playlist-item ${i === currentIndex ? "active" : ""}`}
-                  onClick={() => {
-                    setCurrentIndex(i);
-                    setIsPlaying(true);
-                  }}
+                  className={`song-item ${i === currentIndex ? "active" : ""}`}
+                  draggable={!selectedPlaylistId}
+                  onDragStart={() => handleSongDragStart(song)}
+                  onDragEnd={handleSongDragEnd}
+                  onClick={() => playSong(i)}
                 >
                   <span className="track-num">{String(i + 1).padStart(2, "0")}</span>
                   <span className="track-name">{song.name}</span>
-                  <button
-                    className="delete-btn"
-                    onClick={(e) => deleteSong(i, e)}
-                  >
-                    ×
-                  </button>
+                  {selectedPlaylistId && (
+                    <button
+                      className="remove-song-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSongFromPlaylist(selectedPlaylistId, i);
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ))
             )}
           </div>
         </div>
-
-        <audio
-          ref={audioRef}
-          src={currentSong?.path}
-          onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-          onEnded={playNext}
-          onCanPlay={() => {
-            if (isPlaying && audioRef.current?.paused) {
-              audioRef.current.play();
-            }
-          }}
-        />
       </div>
+
+      <audio
+        ref={audioRef}
+        src={currentSong?.path}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+        onEnded={playNext}
+      />
     </div>
   );
 }

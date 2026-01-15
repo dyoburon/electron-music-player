@@ -17,11 +17,19 @@ const getSongsDir = () => {
   return songsDir;
 };
 
+// Get the playlists file path
+const getPlaylistsPath = () => {
+  const userDataPath = app.getPath("userData");
+  return path.join(userDataPath, "playlists.json");
+};
+
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 520,
-    resizable: false,
+    width: 900,
+    height: 600,
+    minWidth: 800,
+    minHeight: 500,
+    resizable: true,
     title: "RETRO PLAYER",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -142,4 +150,29 @@ ipcMain.handle("load-songs", async () => {
 // Get songs directory path
 ipcMain.handle("get-songs-dir", () => {
   return getSongsDir();
+});
+
+// Load playlists from file
+ipcMain.handle("load-playlists", async () => {
+  const playlistsPath = getPlaylistsPath();
+  try {
+    if (fs.existsSync(playlistsPath)) {
+      const data = fs.readFileSync(playlistsPath, "utf-8");
+      return JSON.parse(data);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+});
+
+// Save playlists to file
+ipcMain.handle("save-playlists", async (_, playlists) => {
+  const playlistsPath = getPlaylistsPath();
+  try {
+    fs.writeFileSync(playlistsPath, JSON.stringify(playlists, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
 });
