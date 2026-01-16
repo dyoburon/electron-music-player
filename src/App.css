@@ -385,6 +385,31 @@ body {
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
+/* Output Selector */
+.output-selector {
+  padding: 8px;
+  background: var(--bg-display);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.output-selector select {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--bg-dark);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.output-selector select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Songs Panel */
 .songs-panel {
   flex: 1;

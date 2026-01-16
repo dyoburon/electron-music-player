@@ -35,8 +35,10 @@ function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const newPlaylistInputRef = useRef<HTMLInputElement>(null);
+  const obsBridgeRef = useRef<WebSocket | null>(null);
 
   const currentPlaylist = selectedPlaylistId
     ? playlists.find((p) => p.id === selectedPlaylistId)
@@ -49,6 +51,47 @@ function App() {
     loadSavedSongs();
     loadSavedPlaylists();
   }, []);
+
+  // Connect to OBS Audio Bridge
+  useEffect(() => {
+    const connectToOBS = () => {
+      console.log('Attempting to connect to OBS Audio Bridge...');
+      try {
+        const ws = new WebSocket('ws://localhost:3456/electron');
+
+        ws.onopen = () => {
+          console.log('Connected to OBS Audio Bridge!');
+          obsBridgeRef.current = ws;
+        };
+
+        ws.onclose = (e) => {
+          console.log('Disconnected from OBS Audio Bridge:', e.code, e.reason);
+          obsBridgeRef.current = null;
+          setTimeout(connectToOBS, 3000);
+        };
+
+        ws.onerror = (e) => {
+          console.error('OBS Bridge WebSocket error:', e);
+        };
+      } catch (err) {
+        console.error('Failed to create WebSocket:', err);
+        setTimeout(connectToOBS, 3000);
+      }
+    };
+
+    connectToOBS();
+
+    return () => {
+      obsBridgeRef.current?.close();
+    };
+  }, []);
+
+  // Send state to OBS Bridge
+  const sendToOBS = (data: Record<string, unknown>) => {
+    if (obsBridgeRef.current?.readyState === WebSocket.OPEN) {
+      obsBridgeRef.current.send(JSON.stringify(data));
+    }
+  };
 
   // Auto-save playlists when they change
   useEffect(() => {
@@ -216,9 +259,15 @@ function App() {
     analyserRef.current = audioContextRef.current.createAnalyser();
     analyserRef.current.fftSize = 32;
 
+    // GainNode for local volume control (OBS captures before this)
+    gainNodeRef.current = audioContextRef.current.createGain();
+    gainNodeRef.current.gain.value = volume;
+
     const source = audioContextRef.current.createMediaElementSource(audioRef.current);
+    // Audio element (full volume) → Analyser → GainNode (local volume) → Speakers
     source.connect(analyserRef.current);
-    analyserRef.current.connect(audioContextRef.current.destination);
+    analyserRef.current.connect(gainNodeRef.current);
+    gainNodeRef.current.connect(audioContextRef.current.destination);
   };
 
   useEffect(() => {
@@ -246,9 +295,11 @@ function App() {
 
     if (isPlaying) {
       audioRef.current.pause();
+      sendToOBS({ isPlaying: false });
     } else {
       try {
         await audioRef.current.play();
+        sendToOBS({ isPlaying: true, currentTime: audioRef.current.currentTime });
       } catch {
         // Play failed
       }
@@ -258,19 +309,27 @@ function App() {
 
   const playNext = () => {
     if (displaySongs.length === 0) return;
-    setCurrentIndex((prev) => (prev + 1) % displaySongs.length);
+    const nextIndex = (currentIndex + 1) % displaySongs.length;
+    const nextSong = displaySongs[nextIndex];
+    setCurrentIndex(nextIndex);
     setIsPlaying(true);
+    sendToOBS({ src: nextSong?.path, trackName: nextSong?.name, isPlaying: true, currentTime: 0 });
   };
 
   const playPrev = () => {
     if (displaySongs.length === 0) return;
-    setCurrentIndex((prev) => (prev - 1 + displaySongs.length) % displaySongs.length);
+    const prevIndex = (currentIndex - 1 + displaySongs.length) % displaySongs.length;
+    const prevSong = displaySongs[prevIndex];
+    setCurrentIndex(prevIndex);
     setIsPlaying(true);
+    sendToOBS({ src: prevSong?.path, trackName: prevSong?.name, isPlaying: true, currentTime: 0 });
   };
 
   const playSong = (index: number) => {
+    const song = displaySongs[index];
     setCurrentIndex(index);
     setIsPlaying(true);
+    sendToOBS({ src: song?.path, trackName: song?.name, isPlaying: true, currentTime: 0 });
   };
 
   useEffect(() => {
@@ -290,6 +349,7 @@ function App() {
     const time = parseFloat(e.target.value);
     audioRef.current.currentTime = time;
     setCurrentTime(time);
+    sendToOBS({ currentTime: time });
   };
 
   return (
@@ -436,10 +496,14 @@ function App() {
               onChange={(e) => {
                 const v = parseFloat(e.target.value);
                 setVolume(v);
-                if (audioRef.current) audioRef.current.volume = v;
+                // Control GainNode for local volume (OBS still gets full audio)
+                if (gainNodeRef.current) {
+                  gainNodeRef.current.gain.value = v;
+                }
               }}
             />
           </div>
+
         </div>
 
         {/* Songs Panel */}

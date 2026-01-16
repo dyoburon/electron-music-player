@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, protocol, session } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 // Enable audio autoplay without user gesture (must be before app ready)
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("disable-background-media-suspend");
+// Use system audio service for better capture compatibility
+app.commandLine.appendSwitch("disable-features", "AudioServiceOutOfProcess");
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -59,6 +61,16 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(() => {
+  // Remove CSP headers to allow WebSocket connections to OBS bridge
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ['']
+      }
+    });
+  });
+
   // Register custom protocol for serving local audio files
   protocol.handle("media", (request) => {
     const filePath = decodeURIComponent(request.url.replace("media://", ""));
