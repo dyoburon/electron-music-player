@@ -52,6 +52,9 @@ function App() {
     loadSavedPlaylists();
   }, []);
 
+  // Ref to hold skip handler (updated when playNext changes)
+  const skipHandlerRef = useRef<(() => void) | null>(null);
+
   // Connect to OBS Audio Bridge
   useEffect(() => {
     const connectToOBS = () => {
@@ -62,6 +65,19 @@ function App() {
         ws.onopen = () => {
           console.log('Connected to OBS Audio Bridge!');
           obsBridgeRef.current = ws;
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('Received command from bridge:', data);
+            if (data.command === 'skip' && skipHandlerRef.current) {
+              console.log('Skipping song via chat command!');
+              skipHandlerRef.current();
+            }
+          } catch (e) {
+            console.error('Invalid message from bridge:', e);
+          }
         };
 
         ws.onclose = (e) => {
@@ -331,6 +347,11 @@ function App() {
     setIsPlaying(true);
     sendToOBS({ src: song?.path, trackName: song?.name, isPlaying: true, currentTime: 0 });
   };
+
+  // Keep skip handler ref updated for chat commands
+  useEffect(() => {
+    skipHandlerRef.current = playNext;
+  }, [displaySongs, currentIndex]);
 
   useEffect(() => {
     if (audioRef.current && currentSong && isPlaying) {
