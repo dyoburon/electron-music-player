@@ -26,6 +26,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.7);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(16).fill(5));
+  const [visualizerEnabled, setVisualizerEnabled] = useState(false); // Disabled to prevent OBS audio freezes
   const [showLibrary, setShowLibrary] = useState(true);
   const [draggedSong, setDraggedSong] = useState<Song | null>(null);
   const [dragOverPlaylistId, setDragOverPlaylistId] = useState<string | null>(null);
@@ -52,8 +53,10 @@ function App() {
     loadSavedPlaylists();
   }, []);
 
-  // Ref to hold skip handler (updated when playNext changes)
+  // Refs to hold command handlers (updated when dependencies change)
   const skipHandlerRef = useRef<(() => void) | null>(null);
+  const playlistHandlerRef = useRef<((name: string) => void) | null>(null);
+  const libraryHandlerRef = useRef<(() => void) | null>(null);
 
   // Connect to OBS Audio Bridge
   useEffect(() => {
@@ -74,6 +77,12 @@ function App() {
             if (data.command === 'skip' && skipHandlerRef.current) {
               console.log('Skipping song via chat command!');
               skipHandlerRef.current();
+            } else if (data.command === 'playlist' && data.name && playlistHandlerRef.current) {
+              console.log('Switching to playlist via chat command:', data.name);
+              playlistHandlerRef.current(data.name);
+            } else if (data.command === 'library' && libraryHandlerRef.current) {
+              console.log('Switching to library via chat command');
+              libraryHandlerRef.current();
             }
           } catch (e) {
             console.error('Invalid message from bridge:', e);
@@ -286,8 +295,10 @@ function App() {
     gainNodeRef.current.connect(audioContextRef.current.destination);
   };
 
+  // Visualizer animation loop - disabled by default to prevent OBS audio freezes
+  // The 60fps React state updates were blocking Electron's main thread
   useEffect(() => {
-    if (!isPlaying || !analyserRef.current) return;
+    if (!visualizerEnabled || !isPlaying || !analyserRef.current) return;
 
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
 
@@ -296,11 +307,11 @@ function App() {
       analyserRef.current.getByteFrequencyData(dataArray);
       const normalized = Array.from(dataArray).map((v) => Math.max(2, (v / 255) * 30));
       setVisualizerData(normalized);
-      if (isPlaying) requestAnimationFrame(animate);
+      if (isPlaying && visualizerEnabled) requestAnimationFrame(animate);
     };
 
     animate();
-  }, [isPlaying]);
+  }, [isPlaying, visualizerEnabled]);
 
   const togglePlay = async () => {
     if (!audioRef.current || !currentSong) return;
@@ -352,6 +363,48 @@ function App() {
   useEffect(() => {
     skipHandlerRef.current = playNext;
   }, [displaySongs, currentIndex]);
+
+  // Switch to playlist by name (for chat commands)
+  const switchToPlaylist = (name: string) => {
+    const playlist = playlists.find(
+      (p) => p.name.toLowerCase() === name.toLowerCase()
+    );
+    if (playlist) {
+      setSelectedPlaylistId(playlist.id);
+      setCurrentIndex(0);
+      setIsPlaying(true);
+      // Get the first song from the playlist to send to OBS
+      const firstSong = playlist.songs[0];
+      if (firstSong) {
+        sendToOBS({ src: firstSong.path, trackName: firstSong.name, isPlaying: true, currentTime: 0 });
+      }
+      console.log('Switched to playlist:', name);
+    } else {
+      console.log('Playlist not found:', name);
+    }
+  };
+
+  // Keep playlist handler ref updated
+  useEffect(() => {
+    playlistHandlerRef.current = switchToPlaylist;
+  }, [playlists]);
+
+  // Switch to library (for chat commands)
+  const switchToLibrary = () => {
+    setSelectedPlaylistId(null);
+    setCurrentIndex(0);
+    setIsPlaying(true);
+    const firstSong = songs[0];
+    if (firstSong) {
+      sendToOBS({ src: firstSong.path, trackName: firstSong.name, isPlaying: true, currentTime: 0 });
+    }
+    console.log('Switched to library');
+  };
+
+  // Keep library handler ref updated
+  useEffect(() => {
+    libraryHandlerRef.current = switchToLibrary;
+  }, [songs]);
 
   useEffect(() => {
     if (audioRef.current && currentSong && isPlaying) {
