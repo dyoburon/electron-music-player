@@ -479,6 +479,11 @@ function App() {
               setSelectedPlaylistId(null);
               setCurrentIndex(randomIndex);
               setShowLibrary(true);
+              setIsPlaying(true);
+              const song = songs[randomIndex];
+              if (song) {
+                sendToOBS({ src: song.path, trackName: song.name, isPlaying: true, currentTime: 0 });
+              }
             }}
           >
             <span className="playlist-icon">📚</span>
@@ -497,6 +502,11 @@ function App() {
                 setSelectedPlaylistId(playlist.id);
                 setCurrentIndex(randomIndex);
                 setShowLibrary(false);
+                setIsPlaying(true);
+                const song = playlist.songs[randomIndex];
+                if (song) {
+                  sendToOBS({ src: song.path, trackName: song.name, isPlaying: true, currentTime: 0 });
+                }
               }}
               onDragOver={(e) => handlePlaylistDragOver(e, playlist.id)}
               onDragLeave={handlePlaylistDragLeave}
