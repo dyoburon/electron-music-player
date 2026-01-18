@@ -369,18 +369,17 @@ function App() {
     const playlist = playlists.find(
       (p) => p.name.toLowerCase() === name.toLowerCase()
     );
-    if (playlist) {
+    if (playlist && playlist.songs.length > 0) {
+      // Start at random song (shuffle mode)
+      const randomIndex = Math.floor(Math.random() * playlist.songs.length);
       setSelectedPlaylistId(playlist.id);
-      setCurrentIndex(0);
+      setCurrentIndex(randomIndex);
       setIsPlaying(true);
-      // Get the first song from the playlist to send to OBS
-      const firstSong = playlist.songs[0];
-      if (firstSong) {
-        sendToOBS({ src: firstSong.path, trackName: firstSong.name, isPlaying: true, currentTime: 0 });
-      }
-      console.log('Switched to playlist:', name);
+      const song = playlist.songs[randomIndex];
+      sendToOBS({ src: song.path, trackName: song.name, isPlaying: true, currentTime: 0 });
+      console.log('Switched to playlist:', name, 'starting at song', randomIndex + 1);
     } else {
-      console.log('Playlist not found:', name);
+      console.log('Playlist not found or empty:', name);
     }
   };
 
@@ -391,14 +390,16 @@ function App() {
 
   // Switch to library (for chat commands)
   const switchToLibrary = () => {
-    setSelectedPlaylistId(null);
-    setCurrentIndex(0);
-    setIsPlaying(true);
-    const firstSong = songs[0];
-    if (firstSong) {
-      sendToOBS({ src: firstSong.path, trackName: firstSong.name, isPlaying: true, currentTime: 0 });
+    if (songs.length > 0) {
+      // Start at random song (shuffle mode)
+      const randomIndex = Math.floor(Math.random() * songs.length);
+      setSelectedPlaylistId(null);
+      setCurrentIndex(randomIndex);
+      setIsPlaying(true);
+      const song = songs[randomIndex];
+      sendToOBS({ src: song.path, trackName: song.name, isPlaying: true, currentTime: 0 });
+      console.log('Switched to library, starting at song', randomIndex + 1);
     }
-    console.log('Switched to library');
   };
 
   // Keep library handler ref updated
@@ -473,8 +474,10 @@ function App() {
           <div
             className={`playlist-entry ${selectedPlaylistId === null ? "active" : ""}`}
             onClick={() => {
+              // Start at random song (shuffle mode)
+              const randomIndex = songs.length > 0 ? Math.floor(Math.random() * songs.length) : 0;
               setSelectedPlaylistId(null);
-              setCurrentIndex(0);
+              setCurrentIndex(randomIndex);
               setShowLibrary(true);
             }}
           >
@@ -489,8 +492,10 @@ function App() {
                 dragOverPlaylistId === playlist.id ? "drag-over" : ""
               }`}
               onClick={() => {
+                // Start at random song (shuffle mode)
+                const randomIndex = playlist.songs.length > 0 ? Math.floor(Math.random() * playlist.songs.length) : 0;
                 setSelectedPlaylistId(playlist.id);
-                setCurrentIndex(0);
+                setCurrentIndex(randomIndex);
                 setShowLibrary(false);
               }}
               onDragOver={(e) => handlePlaylistDragOver(e, playlist.id)}
