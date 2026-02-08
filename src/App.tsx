@@ -34,6 +34,7 @@ function App() {
   const [newPlaylistName, setNewPlaylistName] = useState("");
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const superChatSoundRef = useRef<HTMLAudioElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
@@ -108,6 +109,44 @@ function App() {
 
     return () => {
       obsBridgeRef.current?.close();
+    };
+  }, []);
+
+  // Listen for superchat events and play sound
+  useEffect(() => {
+    const connectToSuperChatEvents = () => {
+      console.log('Connecting to superchat events...');
+      const eventSource = new EventSource('http://localhost:3457/superchat/events');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'superchat') {
+            console.log('Superchat received:', data.username);
+            // Play the superchat sound
+            if (superChatSoundRef.current) {
+              superChatSoundRef.current.currentTime = 0;
+              superChatSoundRef.current.play().catch(e => console.error('Failed to play superchat sound:', e));
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse superchat event:', e);
+        }
+      };
+
+      eventSource.onerror = () => {
+        console.log('Superchat SSE disconnected, reconnecting...');
+        eventSource.close();
+        setTimeout(connectToSuperChatEvents, 3000);
+      };
+
+      return eventSource;
+    };
+
+    const eventSource = connectToSuperChatEvents();
+
+    return () => {
+      eventSource.close();
     };
   }, []);
 
@@ -336,7 +375,15 @@ function App() {
 
   const playNext = () => {
     if (displaySongs.length === 0) return;
-    const nextIndex = (currentIndex + 1) % displaySongs.length;
+    // Pick a random song, avoiding the current one if possible
+    let nextIndex: number;
+    if (displaySongs.length === 1) {
+      nextIndex = 0;
+    } else {
+      do {
+        nextIndex = Math.floor(Math.random() * displaySongs.length);
+      } while (nextIndex === currentIndex);
+    }
     const nextSong = displaySongs[nextIndex];
     setCurrentIndex(nextIndex);
     setIsPlaying(true);
@@ -409,6 +456,10 @@ function App() {
 
   useEffect(() => {
     if (audioRef.current && currentSong && isPlaying) {
+      // Ensure analyzer/gainNode are set up before playing
+      if (!analyserRef.current) {
+        setupAnalyzer();
+      }
       audioRef.current.play();
     }
   }, [currentIndex, selectedPlaylistId]);
@@ -588,6 +639,9 @@ function App() {
                 // Control GainNode for local volume (OBS still gets full audio)
                 if (gainNodeRef.current) {
                   gainNodeRef.current.gain.value = v;
+                } else if (audioRef.current) {
+                  // Fallback if analyzer not set up yet
+                  audioRef.current.volume = v;
                 }
               }}
             />
@@ -653,6 +707,12 @@ function App() {
         onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
         onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
         onEnded={playNext}
+      />
+      {/* Superchat notification sound */}
+      <audio
+        ref={superChatSoundRef}
+        src="media:///Users/dylan/Desktop/projects/music-player/electron-player/sounds/superchat.mp3"
+        preload="auto"
       />
     </div>
   );
