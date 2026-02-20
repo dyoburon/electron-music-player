@@ -676,7 +676,7 @@ function App() {
                 <div
                   key={i}
                   className={`song-item ${i === currentIndex ? "active" : ""}`}
-                  draggable={!selectedPlaylistId}
+                  draggable={true}
                   onDragStart={() => handleSongDragStart(song)}
                   onDragEnd={handleSongDragEnd}
                   onClick={() => playSong(i)}
